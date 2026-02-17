@@ -351,7 +351,38 @@
 
 <script>
 /* ====== あなたの /exec（埋め込み済み） ====== */
-const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyM6t6_ZwQP2UdfyffVnRXqMelL9z8Mwh1PB1SPNduDu8masHAiBRIItIf_LrwKqNfV9w/exec';
+const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxJ5vNrb8TJnMoln9varG9JVn7BNt7umRK-g6o7thhDH68rSD7D9zaeHCv8CsKuDutBcg/exec';
+
+function renderDestinations_(dests){
+  destBox.innerHTML='';
+  for(const d of dests){
+    const wrap = document.createElement('label');
+    wrap.className='dest-item';
+    wrap.innerHTML = `<input type="checkbox" value="${escapeHtml(d.id)}"><div class="dest-title">${escapeHtml(d.label)}</div>`;
+    const cb = wrap.querySelector('input');
+    cb.addEventListener('change', ()=> wrap.classList.toggle('active', cb.checked));
+    destBox.appendChild(wrap);
+  }
+}
+
+function loadDestCache_(){
+  try{
+    const raw = localStorage.getItem(DEST_CACHE_KEY);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    if(!obj?.ts || !Array.isArray(obj?.dests)) return null;
+    if(Date.now() - obj.ts > DEST_CACHE_TTL_MS) return null;
+    return obj.dests;
+  }catch(_){
+    return null;
+  }
+}
+
+function saveDestCache_(dests){
+  try{
+    localStorage.setItem(DEST_CACHE_KEY, JSON.stringify({ ts: Date.now(), dests }));
+  }catch(_){}
+}
 
 const MAX_FILES = 5;
 const MAX_BYTES = 20*1024*1024;
@@ -525,19 +556,22 @@ function jsonp(url, timeoutMs = 25000){
   });
 }
 
+const DEST_CACHE_KEY = 'dest_cache_v1:' + API_ENDPOINT;
+const DEST_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7日
+
 async function loadDestinations(){
+  // 1) まずキャッシュ表示（即）
+  const cached = loadDestCache_();
+  if(cached && cached.length){
+    renderDestinations_(cached);
+  }
+
+  // 2) 裏で最新取得（遅くてもUIは先に出る）
   const js = await jsonp(API_ENDPOINT + '?action=listDest');
   if(!js.ok || !Array.isArray(js.dests)) throw new Error('listDest_failed');
 
-  destBox.innerHTML='';
-  for(const d of js.dests){
-    const wrap = document.createElement('label');
-    wrap.className='dest-item';
-    wrap.innerHTML = `<input type="checkbox" value="${escapeHtml(d.id)}"><div class="dest-title">${escapeHtml(d.label)}</div>`;
-    const cb = wrap.querySelector('input');
-    cb.addEventListener('change', ()=> wrap.classList.toggle('active', cb.checked));
-    destBox.appendChild(wrap);
-  }
+  renderDestinations_(js.dests);
+  saveDestCache_(js.dests);
 }
 
 /** ===== UI操作 ===== */
@@ -1019,10 +1053,18 @@ async function packToLimit(file,maxBytes){
 (async ()=>{
   disableAll(false);
   if(!requireKey()) return;
-  await loadDestinations();
-  render();
+
+  render(); // 先に画面を整える
+
+  loadDestinations()         // awaitしない（UIブロックしない）
+    .then(()=>render())      // 送信先が出たら再レンダ
+    .catch(err=>{
+      msgBad('送信先の取得に失敗しました。電波/URLを確認してください。');
+      console.error(err);
+    });
+
 })().catch(err=>{
-  msgBad('初期化に失敗しました。GitHubのキャッシュ/ServiceWorkerと、/exec URLを確認してください。');
+  msgBad('初期化に失敗しました。');
   console.error(err);
 });
 </script>
