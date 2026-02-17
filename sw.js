@@ -1,4 +1,4 @@
-const CACHE = 'doc-upload-v2';
+const CACHE = 'doc-upload-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -32,4 +32,5 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   e.respondWith(fetch(e.request));
 });
+
 
