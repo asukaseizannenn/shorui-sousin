@@ -73,6 +73,44 @@
     box-shadow:0 1px 4px rgba(0,0,0,.15);
   }
 
+  /* ===== 全画面ロック ===== */
+  .blocker{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.72);
+    display:flex; align-items:center; justify-content:center;
+    z-index:99999;
+    padding:20px;
+  }
+  .blocker[hidden]{display:none}
+  .blockerCard{
+    width:min(560px, 100%);
+    background:#fff;
+    border-radius:18px;
+    padding:18px;
+    box-shadow:0 12px 40px rgba(0,0,0,.35);
+  }
+  .blkTop{display:flex; gap:14px; align-items:center}
+  .blkTitle{font-weight:900; font-size:22px}
+  .blkSub{margin-top:2px; color:#444; font-weight:700}
+  .spinner{
+    width:44px; height:44px;
+    border-radius:50%;
+    border:5px solid rgba(21,86,209,.25);
+    border-top-color:rgba(21,86,209,1);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .blkProgress{margin-top:14px}
+  .blkProgText{font-weight:900; margin-bottom:10px}
+  .blkBar{height:14px; background:#e8eefc; border-radius:999px; overflow:hidden}
+  .blkBarInner{height:100%; width:0% ; background:var(--primary); transition:width .25s ease}
+  .blkMini{margin-top:8px; color:#666; font-size:13px}
+
+  .blkFocus{
+    position:absolute; left:-9999px; width:1px; height:1px; opacity:0;
+  }
+
 </style>
 </head>
 
@@ -139,6 +177,28 @@
   </div>
 </div>
 
+<!-- 送信中ロック（全画面） -->
+<div id="blocker" class="blocker" hidden aria-hidden="true">
+  <div class="blockerCard" role="alertdialog" aria-modal="true" aria-labelledby="blkTitle">
+    <div class="blkTop">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="blkText">
+        <div id="blkTitle" class="blkTitle">アップロード中です</div>
+        <div class="blkSub">画面を閉じないでください（閉じると失敗します）</div>
+      </div>
+    </div>
+
+    <div class="blkProgress">
+      <div id="blkProgText" class="blkProgText">送信準備中…</div>
+      <div class="blkBar"><div id="blkBarInner" class="blkBarInner"></div></div>
+      <div class="blkMini">電波が悪いと時間がかかります。</div>
+    </div>
+
+    <!-- フォーカス固定用（視線/操作をオーバーレイに寄せる） -->
+    <button id="blkFocus" class="blkFocus" type="button">送信中</button>
+  </div>
+</div>
+
 <script>
 /* ====== あなたの /exec（埋め込み済み） ====== */
 const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyW3w7ZAEZfWEOOrqg_iXKm89gzBO9Cj35bB_Dssy2Yt26QuESPN3ws_izF2cr2eLkysA/exec';
@@ -160,6 +220,91 @@ const sendBtn = $('#sendBtn');
 const sending = $('#sending');
 const progText = $('#progText');
 const doneBox = $('#done');
+
+const blocker     = $('#blocker');
+const blkProgText = $('#blkProgText');
+const blkBarInner = $('#blkBarInner');
+const blkFocus    = $('#blkFocus');
+
+let uploading = false;
+let wakeLock = null;
+let popGuardOn = false;
+
+// 送信中：画面スリープ抑止（対応ブラウザのみ）
+async function requestWakeLock_(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+    }
+  }catch(_){}
+}
+async function releaseWakeLock_(){
+  try{ if(wakeLock) await wakeLock.release(); }catch(_){}
+  wakeLock=null;
+}
+
+// 戻るボタン（履歴戻り）抑止
+function enablePopGuard_(){
+  if(popGuardOn) return;
+  popGuardOn = true;
+  try{ history.pushState({uploading:1}, '', location.href); }catch(_){}
+  window.addEventListener('popstate', onPopState_);
+}
+function disablePopGuard_(){
+  if(!popGuardOn) return;
+  popGuardOn = false;
+  window.removeEventListener('popstate', onPopState_);
+}
+function onPopState_(){
+  if(!uploading) return;
+  try{ history.pushState({uploading:1}, '', location.href); }catch(_){}
+  alert('アップロード中は戻れません。完了までお待ちください。');
+}
+
+// タブ/更新/閉じる警告（iPhoneは効きにくいが、PCは効く）
+window.addEventListener('beforeunload', (e)=>{
+  if(!uploading) return;
+  e.preventDefault();
+  e.returnValue = 'アップロード中です。閉じると送信が失敗します。';
+  return e.returnValue;
+});
+
+function showBlocker_(total, index){
+  blocker.hidden = false;
+  blocker.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+  // フォーカスを強制（視線誘導 + 変な操作を減らす）
+  try{ blkFocus.focus({preventScroll:true}); }catch(_){}
+  updateBlockerProgress_(total, index);
+}
+function hideBlocker_(){
+  blocker.hidden = true;
+  blocker.setAttribute('aria-hidden','true');
+  document.body.style.overflow = '';
+}
+function updateBlockerProgress_(total, index){
+  // index: 0..total
+  const pct = total ? Math.round((index/total)*100) : 0;
+  blkProgText.textContent = `送信中：${Math.min(index+1,total)}/${total}`;
+  blkBarInner.style.width = `${pct}%`;
+}
+
+// 送信開始/終了の共通処理
+async function startUploadGuard_(total){
+  uploading = true;
+  disableAll(true);
+  showBlocker_(total, 0);
+  enablePopGuard_();
+  await requestWakeLock_();
+}
+async function endUploadGuard_(){
+  uploading = false;
+  hideBlocker_();
+  disablePopGuard_();
+  await releaseWakeLock_();
+  disableAll(false);
+}
 
 const camBadge  = $('#camBadge');
 const shotBadge = $('#shotBadge');
@@ -357,15 +502,20 @@ $('#f').addEventListener('submit',(e)=>{
   if(queue.length===0) return;
 
   (async ()=>{
-    disableAll(true);
-    sending.style.display='block';
     doneBox.style.display='none';
 
     const note = $('#note').value || '';
     const total = queue.length;
 
+    await startUploadGuard_(total);
+
     for(let i=0;i<queue.length;i++){
+      // 既存の表示も残すならこれ
       progText.textContent = `送信中：${i+1}/${total}`;
+
+      // オーバーレイ側の進捗も更新
+      updateBlockerProgress_(total, i);
+
       const f = queue[i];
 
       const packed = await packToLimit(f, MAX_BYTES);
@@ -394,22 +544,20 @@ $('#f').addEventListener('submit',(e)=>{
       // statusをJSONPで待つ
       const st = await waitStatus_(token, 25000);
       if(!st.ok){
-        sending.style.display='none';
-        disableAll(false);
+        await endUploadGuard_();
         const d = (st.detail ? ` / ${st.detail}` : '');
         msgBad(`送信に失敗しました：${st.error || 'unknown'}${d}`);
         return;
       }
     }
 
-    sending.style.display='none';
+    await endUploadGuard_();
+
     doneBox.style.display='block';
     queue.length=0;
     render();
-    disableAll(false);
-  })().catch(err=>{
-    sending.style.display='none';
-    disableAll(false);
+  })().catch(async (err)=>{
+    await endUploadGuard_();
     msgBad('通信に失敗しました。電波状況を確認して再度お試しください。');
     console.error(err);
   });
