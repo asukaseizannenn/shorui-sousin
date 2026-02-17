@@ -123,20 +123,30 @@
   .spinner{
     width:44px;
     height:44px;
-    min-width:44px;      /* ★追加 */
-    min-height:44px;     /* ★追加 */
-    flex:0 0 44px;       /* ★追加（flexで潰れない） */
-    aspect-ratio:1 / 1;  /* ★追加（保険） */
+    min-width:44px;
+    min-height:44px;
+    flex:0 0 44px;
+    aspect-ratio:1 / 1;
+
     border-radius:50%;
-    border:5px solid rgba(21,86,209,.25);
-    border-top-color:rgba(21,86,209,1);
-    animation:spin 0.9s linear infinite;
-    /* 追加（iOSの描画潰れ対策） */
-    transform-origin: center;
-    -webkit-transform: translateZ(0);
-    will-change: transform;    
+    border:5px solid rgba(21,86,209,.25);   /* 薄いリング */
+    border-top-color: rgba(21,86,209,1);     /* 濃い“針” */
+
+    animation: spin .9s linear infinite;
+    -webkit-animation: spin .9s linear infinite; /* iOS保険 */
+    will-change: transform;
   }
-  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @keyframes spin{
+    to{ transform: rotate(360deg); }
+  }
+  @-webkit-keyframes spin{
+    to{
+      -webkit-transform: rotate(360deg);
+      transform: rotate(360deg);
+    }
+  }
+
   /* 小さい画面では少し詰める（任意だけど実用的） */
   @media (max-width: 380px){
     .blkTitle{ font-size:20px; }
