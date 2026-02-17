@@ -467,8 +467,27 @@ function render(){
       img.src=URL.createObjectURL(f);
       img.onload=()=>URL.revokeObjectURL(img.src);
     }else{
-      img.alt='PDF';
-      img.style.background='#eef3ff';
+      // PDFは画像プレビューしない（壊れて見えるのを防ぐ）
+      img.remove();
+      const pdfStub = document.createElement('div');
+      pdfStub.style.height = '120px';
+      pdfStub.style.display = 'flex';
+      pdfStub.style.alignItems = 'center';
+      pdfStub.style.justifyContent = 'center';
+      pdfStub.style.background = '#eef3ff';
+      pdfStub.style.fontWeight = '900';
+      pdfStub.textContent = 'PDF';
+      card.appendChild(pdfStub);
+
+      // クリックで別タブ表示（任意）
+      card.style.cursor = 'pointer';
+      card.onclick = () => {
+        try {
+          const url = URL.createObjectURL(f);
+          window.open(url, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } catch(_) {}
+      };
     }
     const meta=document.createElement('div'); meta.className='meta';
     meta.innerHTML=`<div class="row"><strong>${escapeHtml(f.name||'file')}</strong></div>
