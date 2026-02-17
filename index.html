@@ -55,6 +55,24 @@
   .cam video{flex:1 1 auto;width:100%;object-fit:cover}
   .cam .controls{display:flex;gap:10px;justify-content:space-between;padding:12px;background:rgba(0,0,0,.6)}
   .cam .btn{flex:1}
+
+  /* 撮影枚数バッジの見た目を追加 */
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:22px;
+    height:22px;
+    padding:0 7px;
+    margin-left:8px;
+    border-radius:999px;
+    background:#fff;
+    color:var(--primary);
+    font-weight:900;
+    font-size:13px;
+    box-shadow:0 1px 4px rgba(0,0,0,.15);
+  }
+
 </style>
 </head>
 
@@ -71,16 +89,18 @@
       <label>利用者名・CM名 等（任意）</label>
       <input type="text" id="note" placeholder="例）山田 太郎／CM名／事業所名 など" />
 
-      <label>写真・PDF（最大 8 枚）</label>
+      <label>写真・PDF（最大 5 枚）</label>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" id="pickBtn">📁 アルバムから選ぶ</button>
-        <button type="button" class="btn btn-primary" id="camBtn">📸 写真を撮る</button>
+        <button type="button" class="btn btn-primary" id="camBtn">
+          📸 写真を撮る <span id="camBadge" class="badge" style="display:none"></span>
+        </button>
       </div>
       <div class="mini">※ 1ファイル上限：20MB（jpeg / png / pdf）</div>
 
       <input id="pick" type="file" accept="image/jpeg,image/png,application/pdf" multiple style="display:none">
-      <input id="cameraFile" type="file" accept="image/*" capture="environment"
-             style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+      <input id="cameraFile" type="file" accept="image/*" capture="environment" multiple
+            style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
 
       <div class="btn-bar">
         <button type="button" class="btn btn-danger" id="clearBtn">✖ すべて削除</button>
@@ -112,7 +132,9 @@
     <video id="camVideo" autoplay playsinline></video>
     <div class="controls">
       <button type="button" class="btn" id="camClose">閉じる</button>
-      <button type="button" class="btn btn-primary" id="camShot">撮影して追加</button>
+      <button type="button" class="btn btn-primary" id="camShot">
+        撮影して追加 <span id="shotBadge" class="badge" style="display:none"></span>
+      </button>
     </div>
   </div>
 </div>
@@ -121,7 +143,7 @@
 /* ====== あなたの /exec（埋め込み済み） ====== */
 const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyW3w7ZAEZfWEOOrqg_iXKm89gzBO9Cj35bB_Dssy2Yt26QuESPN3ws_izF2cr2eLkysA/exec';
 
-const MAX_FILES = 8;
+const MAX_FILES = 5;
 const MAX_BYTES = 20*1024*1024;
 const ALLOW_MIME = ['image/jpeg','image/png','application/pdf'];
 
@@ -139,11 +161,19 @@ const sending = $('#sending');
 const progText = $('#progText');
 const doneBox = $('#done');
 
+const camBadge  = $('#camBadge');
+const shotBadge = $('#shotBadge');
+
 const camModal = $('#camModal');
 const camVideo = $('#camVideo');
 const camClose = $('#camClose');
 const camShot  = $('#camShot');
 let camStream = null;
+
+// iOS(iPhone/iPad)はネイティブカメラ(input capture)が最も高画質・安定
+const IS_IOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS対策
 
 /** ===== 鍵：QRのURLに埋める → 端末保存 → URLから消す（入力ゼロ） ===== */
 const qs = new URLSearchParams(location.search);
@@ -225,21 +255,49 @@ $('#camBtn').onclick=()=>{
 $('#clearBtn').onclick=()=>{ queue.length=0; render(); };
 
 pickInput.addEventListener('change',e=>{ for(const f of e.target.files) queue.push(f); e.target.value=''; render(); });
-cameraFile.addEventListener('change',e=>{ if(e.target.files[0]) queue.push(e.target.files[0]); e.target.value=''; render(); });
+cameraFile.addEventListener('change',e=>{
+  for(const f of e.target.files) queue.push(f);
+  e.target.value='';
+  render();
+});
 
 /** ===== カメラ ===== */
 async function openCameraOrFallback(){
-  if(!navigator.mediaDevices?.getUserMedia){ cameraFile.click(); return; }
-  try{
-    camStream = await navigator.mediaDevices.getUserMedia({ video:{facingMode:{ideal:'environment'}}, audio:false });
-    camVideo.srcObject=camStream;
-    if(camVideo.readyState<2) await new Promise(ok=>camVideo.addEventListener('loadeddata',ok,{once:true}));
+  // iOSはネイティブカメラが一番文字が潰れにくい（黒い標準UI）
+  if (IS_IOS) {
+    cameraFile.click();
+    return;
+  }
+
+  // それ以外は自前カメラ（getUserMedia）
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraFile.click();
+    return;
+  }
+
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      audio: false
+    });
+
+    camVideo.srcObject = camStream;
+    if (camVideo.readyState < 2) {
+      await new Promise(ok => camVideo.addEventListener('loadeddata', ok, { once: true }));
+    }
+
     camModal.classList.add('show');
-    document.body.style.overflow='hidden';
-  }catch(_){
+    document.body.style.overflow = 'hidden';
+  } catch (_) {
+    // 権限NGや非対応ならネイティブへ
     cameraFile.click();
   }
 }
+
 function stopCamera(){
   if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
   camVideo.srcObject=null;
@@ -254,13 +312,29 @@ camShot.onclick=async ()=>{
   const name=`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.jpg`;
   queue.push(toFileLike(blob,name));
   render();
+  updateBadges();
 };
 async function snapFromVideo(){
-  const w=camVideo.videoWidth||1280, h=camVideo.videoHeight||720;
-  const c=document.createElement('canvas'); c.width=w; c.height=h;
-  c.getContext('2d').drawImage(camVideo,0,0,w,h);
-  return await blobFromCanvas(c,'image/jpeg',0.95);
+  // 可能なら「写真」として取得（動画フレームより文字が潰れにくい）
+  try {
+    const track = camStream?.getVideoTracks?.()[0];
+    if (track && window.ImageCapture) {
+      const cap = new ImageCapture(track);
+      const blob = await cap.takePhoto();
+      return blob; // 多くは image/jpeg
+    }
+  } catch (_) {}
+
+  // フォールバック：動画フレームをcanvas化（解像度・品質を上げる）
+  const w = camVideo.videoWidth || 1920;
+  const h = camVideo.videoHeight || 1080;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(camVideo, 0, 0, w, h);
+
+  return await blobFromCanvas(c, 'image/jpeg', 0.98); // 0.95 → 0.98
 }
+
 async function blobFromCanvas(canvas,mime='image/jpeg',quality=0.95){
   if(canvas.toBlob){
     const b=await new Promise(res=>canvas.toBlob(res,mime,quality));
@@ -419,12 +493,37 @@ function render(){
   precheck.className='msg msg-ok';
   precheck.innerHTML=`👍 送信できます。枚数：<strong>${queue.length}</strong>、合計：約<strong>${(sum/1024/1024).toFixed(1)}MB</strong>`;
   sendBtn.disabled = (getSelectedDestIds().length===0);
+
+  updateBadges();
 }
 function msgBad(t){
   precheck.className='msg msg-bad';
   precheck.textContent=t;
 }
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&quot;',"'":'&#39;'}[c]));}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c]));
+}
+function setBadge(el, n){
+  if(!el) return;
+  if(n > 0){
+    el.style.display = 'inline-flex';
+    el.textContent = String(n);
+  }else{
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+}
+function updateBadges(){
+  const photoCount = queue.filter(f => (f.type||'').startsWith('image/')).length;
+  setBadge(camBadge, photoCount);
+  setBadge(shotBadge, photoCount);
+}
 
 /** ===== 画像最適化（20MB以内に収める最小限） ===== */
 function readFileAsDataURL(file){ return new Promise((ok,ng)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=ng; r.readAsDataURL(file); }); }
@@ -499,7 +598,6 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
-
 
 
 
