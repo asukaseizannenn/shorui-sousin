@@ -646,7 +646,8 @@ async function waitStatus_(token, timeoutMs = 120000){
   return { ok:false, error:'timeout' };
 }
 async function postNoCorsWithRetry_(payload, retries){
-  const body = JSON.stringify(payload);
+  const body  = JSON.stringify(payload);
+  const token = payload.token;
 
   for(let attempt = 0; attempt <= retries; attempt++){
     try{
@@ -655,19 +656,54 @@ async function postNoCorsWithRetry_(payload, retries){
         mode: 'no-cors',
         headers: { 'Content-Type':'text/plain;charset=utf-8' },
         body
-      }, 20000); // 1回あたりのタイムアウト（ms）
+      }, 60000); // ★20s→60s推奨（Abort起因の重複を減らす）
 
-      // no-corsなのでレスポンス中身は見れない。ここまで来たら「通信としては送れた」扱い
-      return;
+      return; // 通信として送れた扱い
 
     }catch(err){
+      // ★重要：POSTが失敗した“ように見えても”サーバに届いてる可能性がある
+      // 先に status を数回確認して、pending/ok なら再送しない
+      const delivered = await probeDeliveredByStatus_(token);
+      if(delivered) return;
+
       if(attempt >= retries) throw err;
 
-      // バックオフ（少しずつ待つ + ばらつき）
       const wait = 800 * (attempt + 1) + Math.floor(Math.random() * 500);
       await sleep_(wait);
     }
   }
+}
+
+async function probeDeliveredByStatus_(token){
+  // 10秒くらい様子を見る（サーバがstatus書くまでラグることがある）
+  const limitMs = 10000;
+  const start = Date.now();
+
+  while(Date.now() - start < limitMs){
+    try{
+      const st = await jsonp(
+        API_ENDPOINT + '?action=status&token=' + encodeURIComponent(token),
+        15000
+      );
+
+      // ok なら当然届いてる
+      if(st && st.ok) return true;
+
+      // errorでも「not_found系」以外なら、サーバ側で何か起きていて届いてる可能性が高い
+      if(st && st.error && !/not_?found|no_?token|missing/i.test(String(st.error))){
+        return true;
+      }
+
+      // pending（あなたの実装では okもerrorも無い状態）なら届いてる途中と判断
+      if(st && !st.ok && !st.error){
+        return true;
+      }
+    }catch(_){
+      // JSONP失敗は無視（回線悪化時）
+    }
+    await sleep_(800);
+  }
+  return false;
 }
 
 // fetch をタイムアウト付きで実行（AbortControllerが使える環境だけ abort）
