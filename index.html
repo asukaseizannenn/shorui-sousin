@@ -205,7 +205,7 @@ const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyW3w7ZAEZfWEOOrqg
 
 const MAX_FILES = 5;
 const MAX_BYTES = 20*1024*1024;
-const ALLOW_MIME = ['image/jpeg','image/png','application/pdf'];
+const ALLOW_MIME = ['image/jpeg','image/png','image/heic','image/heif','application/pdf'];
 
 const KEY_STORAGE = 'upload_key_v1';
 const queue = [];
@@ -283,10 +283,10 @@ function hideBlocker_(){
   blocker.setAttribute('aria-hidden','true');
   document.body.style.overflow = '';
 }
-function updateBlockerProgress_(total, index){
-  // index: 0..total
-  const pct = total ? Math.round((index/total)*100) : 0;
-  blkProgText.textContent = `送信中：${Math.min(index+1,total)}/${total}`;
+function updateBlockerProgress_(total, done){
+  const d = Math.max(0, Math.min(done, total));
+  const pct = total ? Math.round((d/total)*100) : 0;
+  blkProgText.textContent = `送信中：${d}/${total}`;
   blkBarInner.style.width = `${pct}%`;
 }
 
@@ -560,8 +560,7 @@ $('#f').addEventListener('submit',(e)=>{
     queue.length=0;
     render();
   })().catch(async err=>{
-    sending.style.display='none';
-    disableAll(false);
+    await endUploadGuard_(); // ★これ必須
     msgBad('通信に失敗しました：' + (err?.message || String(err)));
     console.error(err);
   });
@@ -669,41 +668,51 @@ function render(){
   }
 
   queue.forEach((f,i)=>{
-    const card=document.createElement('div'); card.className='thumb';
-    const img=document.createElement('img');
-    if((f.type||'').startsWith('image/')){
-      img.src=URL.createObjectURL(f);
-      img.onload=()=>URL.revokeObjectURL(img.src);
+    const card = document.createElement('div');
+    card.className = 'thumb';
+
+    const isImg = (f.type||'').startsWith('image/');
+
+    if(isImg){
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      img.onload = ()=>URL.revokeObjectURL(img.src);
+      card.appendChild(img);
     }else{
-      // PDFは画像プレビューしない（壊れて見えるのを防ぐ）
-      img.remove();
       const pdfStub = document.createElement('div');
-      pdfStub.style.height = '120px';
-      pdfStub.style.display = 'flex';
-      pdfStub.style.alignItems = 'center';
-      pdfStub.style.justifyContent = 'center';
-      pdfStub.style.background = '#eef3ff';
-      pdfStub.style.fontWeight = '900';
-      pdfStub.textContent = 'PDF';
+      pdfStub.style.height='120px';
+      pdfStub.style.display='flex';
+      pdfStub.style.alignItems='center';
+      pdfStub.style.justifyContent='center';
+      pdfStub.style.background='#eef3ff';
+      pdfStub.style.fontWeight='900';
+      pdfStub.textContent='PDF';
       card.appendChild(pdfStub);
 
-      // クリックで別タブ表示（任意）
-      card.style.cursor = 'pointer';
-      card.onclick = () => {
-        try {
+      card.style.cursor='pointer';
+      card.onclick = ()=>{
+        try{
           const url = URL.createObjectURL(f);
-          window.open(url, '_blank', 'noopener');
-          setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        } catch(_) {}
+          window.open(url,'_blank','noopener');
+          setTimeout(()=>URL.revokeObjectURL(url), 60000);
+        }catch(_){}
       };
     }
-    const meta=document.createElement('div'); meta.className='meta';
-    meta.innerHTML=`<div class="row"><strong>${escapeHtml(f.name||'file')}</strong></div>
-                    <div class="row"><span>${(f.size/1024/1024).toFixed(1)}MB</span>
-                    <button type="button" class="remove" data-i="${i}">削除</button></div>`;
-    card.appendChild(img); card.appendChild(meta); thumbs.appendChild(card);
+
+    const meta = document.createElement('div');
+    meta.className='meta';
+    meta.innerHTML = `<div class="row"><strong>${escapeHtml(f.name||'file')}</strong></div>
+                      <div class="row"><span>${(f.size/1024/1024).toFixed(1)}MB</span>
+                      <button type="button" class="remove" data-i="${i}">削除</button></div>`;
+    card.appendChild(meta);
+    thumbs.appendChild(card);
   });
-  document.querySelectorAll('.remove').forEach(b=>b.onclick=e=>{ queue.splice(Number(e.currentTarget.dataset.i),1); render(); });
+
+  document.querySelectorAll('.remove').forEach(b=>b.onclick=e=>{
+    e.stopPropagation(); // ★これ必須
+    queue.splice(Number(e.currentTarget.dataset.i),1);
+    render();
+  });
 
   if(queue.some(f=>!ALLOW_MIME.includes((f.type||'').toLowerCase()))){
     msgBad('送信できない形式が含まれています（jpeg/png/pdfのみ）。');
