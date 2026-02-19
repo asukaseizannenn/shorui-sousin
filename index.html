@@ -409,6 +409,28 @@ const MAX_BYTES = 20*1024*1024;
 const ALLOW_MIME = ['image/jpeg','image/png','image/heic','image/heif','application/pdf'];
 
 const KEY_STORAGE = 'upload_key_v1';
+// ★ここに追加（cookieブリッジ）
+const KEY_COOKIE = 'upload_key_v1_cookie';
+
+function setKeyCookie_(k){
+  try{
+    document.cookie =
+      `${KEY_COOKIE}=${encodeURIComponent(k)}; Max-Age=31536000; Path=/; SameSite=Lax; Secure`;
+  }catch(_){}
+}
+
+function getKeyCookie_(){
+  try{
+    const re = new RegExp('(?:^|; )' + KEY_COOKIE.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '=([^;]*)');
+    const m = document.cookie.match(re);
+    return m ? decodeURIComponent(m[1]) : '';
+  }catch(_){
+    return '';
+  }
+}
+
+const queue = [];
+const $ = s => document.querySelector(s);
 const queue = [];
 const $ = s => document.querySelector(s);
 
@@ -565,11 +587,11 @@ const IS_IOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS対策
 
-/** ===== 鍵：QRのURLに埋める → 端末保存（search/hash両対応） ===== */
+/** ===== 鍵：QRのURLに埋める → 端末保存（search/hash + cookie） ===== */
 const qs = new URLSearchParams(location.search);
 const hs = new URLSearchParams((location.hash || '').replace(/^#/, ''));
 
-// install=1 は search でも hash でもOKにする
+// install=1 は search/hashどちらでもOK
 const installMode = (qs.get('install') === '1') || (hs.get('install') === '1');
 
 // iOSホーム画面（standalone）判定
@@ -577,17 +599,18 @@ const IS_STANDALONE =
   window.matchMedia('(display-mode: standalone)').matches ||
   (typeof navigator.standalone !== 'undefined' && navigator.standalone);
 
-// k も search/hash 両対応
+// k は search/hash から優先取得
 let AUTH_KEY = (qs.get('k') || hs.get('k') || '').trim();
 
 if (AUTH_KEY) {
-  // どちらのコンテキストでも保存
+  // localStorage と cookie の両方へ保存（＝Safari→ホーム画面の橋渡し）
   try { localStorage.setItem(KEY_STORAGE, AUTH_KEY); } catch(_) {}
+  setKeyCookie_(AUTH_KEY);
 
-  // ★消すタイミングが重要
-  // - install=1 のSafariでは消さない（ホーム画面追加時に k を残す）
-  // - ホーム画面（standalone）で起動したら消す（以後URLに残さない）
-  // - installModeでない通常運用は消してOK
+  // ★消すタイミング
+  // - install=1 のSafariでは消さない（ホーム画面追加時にURLを保つため）
+  // - standaloneでは消す（以後URLに残さない）
+  // - installでない通常運用は消してOK
   const shouldStrip = IS_STANDALONE || !installMode;
 
   if (shouldStrip) {
@@ -598,16 +621,18 @@ if (AUTH_KEY) {
       const q = qs.toString();
       const h = hs.toString();
 
-      const newUrl =
-        location.pathname +
-        (q ? '?' + q : '') +
-        (h ? '#' + h : '');
-
-      history.replaceState(null, '', newUrl);
+      history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + (h ? '#' + h : ''));
     } catch(_) {}
   }
 } else {
+  // URLに無ければ storage→cookie の順で復元
   try { AUTH_KEY = (localStorage.getItem(KEY_STORAGE) || '').trim(); } catch(_) {}
+  if (!AUTH_KEY) AUTH_KEY = (getKeyCookie_() || '').trim();
+
+  // cookieから復元できたら、今のコンテキストのlocalStorageにも戻す
+  if (AUTH_KEY) {
+    try { localStorage.setItem(KEY_STORAGE, AUTH_KEY); } catch(_) {}
+  }
 }
 
 function updateInstallGuide_(){
@@ -634,6 +659,15 @@ function updateInstallGuide_(){
 }
 
 function requireKey(){
+  // ★最後の保険：ここでもcookieから復元を試す
+  if(!AUTH_KEY){
+    const ck = (getKeyCookie_() || '').trim();
+    if(ck){
+      AUTH_KEY = ck;
+      try { localStorage.setItem(KEY_STORAGE, AUTH_KEY); } catch(_) {}
+    }
+  }
+
   if(!AUTH_KEY){
     precheck.className='msg msg-bad';
     precheck.textContent='⚠ この端末は有効化されていません。配布されたQRから開いてください。';
@@ -642,6 +676,7 @@ function requireKey(){
   }
   return true;
 }
+
 function disableAll(disabled){
   $('#pickBtn').disabled = disabled;
   $('#camBtn').disabled  = disabled;
@@ -1232,6 +1267,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
