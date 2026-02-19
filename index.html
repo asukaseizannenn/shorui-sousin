@@ -312,6 +312,7 @@
         <button type="button" class="btn btn-danger" id="clearBtn">✖ すべて削除</button>
       </div>
 
+      <div id="installGuide" class="msg msg-info" style="display:none" role="status"></div>
       <div id="precheck" class="msg msg-info" role="status">準備中…</div>
       <div class="thumbs" id="thumbs"></div>
 
@@ -417,6 +418,7 @@ const cameraFile = $('#cameraFile');
 const thumbs = $('#thumbs');
 const precheck = $('#precheck');
 const sendBtn = $('#sendBtn');
+const installGuide = $('#installGuide');  
 const sending = $('#sending');
 const progText = $('#progText');
 const doneBox = $('#done');
@@ -565,22 +567,25 @@ const IS_IOS =
 
 /** ===== 鍵：QRのURLに埋める → 端末保存 ===== */
 const qs = new URLSearchParams(location.search);
+
+// install=1 のときは「ホーム画面追加を完了させる」ためのモード
 const installMode = (qs.get('install') === '1');
 
+// iOSホーム画面（standalone）判定
 const IS_STANDALONE =
   window.matchMedia('(display-mode: standalone)').matches ||
-  (typeof navigator.standalone !== 'undefined' && navigator.standalone); // iOS
+  (typeof navigator.standalone !== 'undefined' && navigator.standalone);
 
 let AUTH_KEY = (qs.get('k') || '').trim();
 
 if (AUTH_KEY) {
-  // どちらのコンテキストでも保存はする
+  // どちらのコンテキストでも保存
   try { localStorage.setItem(KEY_STORAGE, AUTH_KEY); } catch(_) {}
 
   // ★消すタイミングが重要
-  // - install=1 のSafariでは消さない（ホーム画面追加時に k を残すため）
-  // - ホーム画面（standalone）で起動したら消す（以後URLにキーを残さない）
-  // - install=0（通常運用）は今まで通り消してOK
+  // - install=1 のSafariでは消さない（ホーム画面追加時に k を残す）
+  // - ホーム画面（standalone）で起動したら消す（以後URLに残さない）
+  // - installModeでない通常運用は消してOK
   const shouldStrip = IS_STANDALONE || !installMode;
 
   if (shouldStrip) {
@@ -593,6 +598,29 @@ if (AUTH_KEY) {
   }
 } else {
   try { AUTH_KEY = (localStorage.getItem(KEY_STORAGE) || '').trim(); } catch(_) {}
+}
+
+function updateInstallGuide_(){
+  // install=1 かつ Safari（= standalone ではない）だけ案内表示
+  if(installMode && !IS_STANDALONE){
+    const shareHint = IS_IOS ? '画面下の共有（□↑）' : 'ブラウザ右上のメニュー（︙）';
+    installGuide.style.display = 'block';
+    installGuide.className = 'msg msg-info';
+    installGuide.innerHTML = `
+      <strong>📌 ホーム画面に追加してください</strong><br>
+      次回から迷わないために、<b>アイコンから開く運用</b>にします。<br>
+      <ol style="margin:8px 0 0 18px;padding:0">
+        <li>${shareHint} をタップ</li>
+        <li>「ホーム画面に追加」</li>
+        <li>追加した <b>書類送信</b> アイコンから開く</li>
+      </ol>
+      <div class="mini">※ 追加後は、このQRを使わずアイコンだけでOKです。</div>
+      <div class="mini">※ LINE等の内蔵ブラウザなら「Safariで開く」を選んでください。</div>
+    `;
+  }else{
+    installGuide.style.display = 'none';
+    installGuide.innerHTML = '';
+  }
 }
 
 function requireKey(){
@@ -1139,6 +1167,10 @@ async function packToLimit(file,maxBytes){
 // 初期化
 (async ()=>{
 
+  // ★install=1 のときだけ「ホーム画面に追加」案内を出す
+  // （requireKeyで止まるケースでも、案内だけは出したいので最初に呼ぶ）
+  try{ updateInstallGuide_(); }catch(_){}
+
   // ===== 更新チェック（SWなしで確実に最新版へ）=====
   try{
     const res = await fetch('./version.json?ts=' + Date.now(), { cache: 'no-store' });
@@ -1162,6 +1194,9 @@ async function packToLimit(file,maxBytes){
 
   // ===== ここから既存の初期化 =====
   disableAll(false);
+
+  // 鍵が無い場合は requireKey() がメッセージを出して止める
+  // （install=1 の案内は上で出しているので、ここでreturnしてOK）
   if(!requireKey()) return;
 
   render();                 // 先に画面を整える
@@ -1183,9 +1218,11 @@ async function packToLimit(file,maxBytes){
   console.error(err);
 });
 
+
 </script>
 </body>
 </html>
+
 
 
 
