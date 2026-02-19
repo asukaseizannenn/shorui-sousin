@@ -279,6 +279,29 @@
     position:absolute; left:-9999px; width:1px; height:1px; opacity:0;
   }
 
+  /* ===== 送信先：読み込み中ロック（クリック不能）===== */
+  #destBox{ position:relative; }
+  
+  /* loading クラスが付いている間は操作不能 */
+  #destBox.loading{
+    pointer-events:none;   /* ★これでクリック・タップ不可 */
+    opacity:.75;
+  }
+  
+  /* うっすら覆って「更新中」を明示（好みで削除OK） */
+  #destBox.loading::after{
+    content:"送信先を更新中…";
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+    color:var(--primary);
+    background:rgba(255,255,255,.72);
+    border-radius:18px;
+    backdrop-filter: blur(2px);
+  }
 </style>
 </head>
 
@@ -374,13 +397,37 @@ const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwtWxhYXS3Zr7sVRIw
 console.log('API_ENDPOINT=', API_ENDPOINT);
 
 function renderDestinations_(dests){
+  // ★再描画前に現在の選択を退避
+  try{
+    selectedDestSet = new Set(getSelectedDestIds());
+  }catch(_){
+    selectedDestSet = new Set();
+  }
+
   destBox.innerHTML='';
+
   for(const d of dests){
     const wrap = document.createElement('label');
     wrap.className='dest-item';
-    wrap.innerHTML = `<input type="checkbox" value="${escapeHtml(d.id)}"><div class="dest-title">${escapeHtml(d.label)}</div>`;
+    wrap.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(d.id)}">
+      <div class="dest-title">${escapeHtml(d.label)}</div>
+    `;
+
     const cb = wrap.querySelector('input');
-    cb.addEventListener('change', ()=> wrap.classList.toggle('active', cb.checked));
+
+    // ★復元
+    if(selectedDestSet.has(cb.value)){
+      cb.checked = true;
+      wrap.classList.add('active');
+    }
+
+    cb.addEventListener('change', ()=>{
+      wrap.classList.toggle('active', cb.checked);
+      if(cb.checked) selectedDestSet.add(cb.value);
+      else selectedDestSet.delete(cb.value);
+    });
+
     destBox.appendChild(wrap);
   }
 }
@@ -431,6 +478,7 @@ function getKeyCookie_(){
 }
 
 const queue = [];
+let selectedDestSet = new Set();
 const $ = s => document.querySelector(s);
 
 const destBox = $('#destBox');
@@ -450,11 +498,15 @@ let destLoading = true;
 function setDestLoadingUI_(on){
   destLoading = on;
 
-  // 送信先カード領域：ロード中の見た目
+  // ★送信先エリアをロック
+  destBox.classList.toggle('loading', on);
+  destBox.setAttribute('aria-busy', on ? 'true' : 'false');
+
+  // 送信先カード領域：ロード中の見た目（初回だけスケルトン）
   if(on){
-    destBox.innerHTML = `
-      <div class="mini" style="margin-bottom:6px">送信先を読み込み中…</div>
-      <div class="dest-box">
+    const hasAny = !!destBox.querySelector('input[type=checkbox]');
+    if(!hasAny){
+      destBox.innerHTML = `
         ${[1,2,3,4].map(()=>`
           <div style="
             height:54px;border-radius:18px;
@@ -464,8 +516,8 @@ function setDestLoadingUI_(on){
             animation: sk 1.1s infinite;
           "></div>
         `).join('')}
-      </div>
-    `;
+      `;
+    }
   }
 
   // ロード完了までは操作ボタン無効
@@ -481,7 +533,7 @@ function setDestLoadingUI_(on){
     precheck.textContent='送信先を読み込み中です…（電波が悪いと時間がかかります）';
   }
 }
-
+  
 // スケルトンのアニメーション
 const st = document.createElement('style');
 st.textContent = `@keyframes sk{0%{background-position:0% 0}100%{background-position:200% 0}}`;
@@ -1295,6 +1347,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
