@@ -409,7 +409,8 @@ const MAX_BYTES = 20*1024*1024;
 const ALLOW_MIME = ['image/jpeg','image/png','image/heic','image/heif','application/pdf'];
 
 const KEY_STORAGE = 'upload_key_v1';
-// ★ここに追加（cookieブリッジ）
+
+// ★cookieブリッジ
 const KEY_COOKIE = 'upload_key_v1_cookie';
 
 function setKeyCookie_(k){
@@ -431,8 +432,6 @@ function getKeyCookie_(){
 
 const queue = [];
 const $ = s => document.querySelector(s);
-const queue = [];
-const $ = s => document.querySelector(s);
 
 const destBox = $('#destBox');
 const pickInput = $('#pick');
@@ -440,7 +439,7 @@ const cameraFile = $('#cameraFile');
 const thumbs = $('#thumbs');
 const precheck = $('#precheck');
 const sendBtn = $('#sendBtn');
-const installGuide = $('#installGuide');  
+const installGuide = $('#installGuide');
 const sending = $('#sending');
 const progText = $('#progText');
 const doneBox = $('#done');
@@ -1267,6 +1266,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
