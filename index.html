@@ -1116,16 +1116,39 @@ async function packToLimit(file,maxBytes){
 
 // 初期化
 (async ()=>{
+
+  // ===== 更新チェック（SWなしで確実に最新版へ）=====
+  try{
+    const res = await fetch('./version.json?ts=' + Date.now(), { cache: 'no-store' });
+    const js  = await res.json();
+    const v   = String(js?.v || '');
+    if(v){
+      const KEY = 'app_version_seen';
+      const prev = localStorage.getItem(KEY);
+
+      // 既に使ったことがある端末で、バージョンが変わったらリロード
+      if(prev && prev !== v){
+        localStorage.setItem(KEY, v);
+        location.reload();
+        return; // ★重要：以降の初期化を止める
+      }
+      localStorage.setItem(KEY, v);
+    }
+  }catch(_){
+    // version.json が取れない時は無視して続行（ネット不安定でも業務を止めない）
+  }
+
+  // ===== ここから既存の初期化 =====
   disableAll(false);
   if(!requireKey()) return;
 
   render();                 // 先に画面を整える
-  setDestLoadingUI_(true);  // ★追加：送信先ロード中UI＋操作ロック
+  setDestLoadingUI_(true);  // 送信先ロード中UI＋操作ロック
 
   loadDestinations()         // awaitしない（UIブロックしない）
     .then(()=>{
-      setDestLoadingUI_(false); // ★追加：ロード完了で解除
-      render();                 // 送信先が出たら再レンダ
+      setDestLoadingUI_(false);
+      render();
     })
     .catch(err=>{
       setDestLoadingUI_(false);
@@ -1141,6 +1164,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
