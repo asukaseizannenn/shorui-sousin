@@ -565,18 +565,20 @@ const IS_IOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS対策
 
-/** ===== 鍵：QRのURLに埋める → 端末保存 ===== */
+/** ===== 鍵：QRのURLに埋める → 端末保存（search/hash両対応） ===== */
 const qs = new URLSearchParams(location.search);
+const hs = new URLSearchParams((location.hash || '').replace(/^#/, ''));
 
-// install=1 のときは「ホーム画面追加を完了させる」ためのモード
-const installMode = (qs.get('install') === '1');
+// install=1 は search でも hash でもOKにする
+const installMode = (qs.get('install') === '1') || (hs.get('install') === '1');
 
 // iOSホーム画面（standalone）判定
 const IS_STANDALONE =
   window.matchMedia('(display-mode: standalone)').matches ||
   (typeof navigator.standalone !== 'undefined' && navigator.standalone);
 
-let AUTH_KEY = (qs.get('k') || '').trim();
+// k も search/hash 両対応
+let AUTH_KEY = (qs.get('k') || hs.get('k') || '').trim();
 
 if (AUTH_KEY) {
   // どちらのコンテキストでも保存
@@ -590,10 +592,18 @@ if (AUTH_KEY) {
 
   if (shouldStrip) {
     try {
-      qs.delete('k');
-      qs.delete('install');
+      qs.delete('k'); qs.delete('install');
+      hs.delete('k'); hs.delete('install');
+
       const q = qs.toString();
-      history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+      const h = hs.toString();
+
+      const newUrl =
+        location.pathname +
+        (q ? '?' + q : '') +
+        (h ? '#' + h : '');
+
+      history.replaceState(null, '', newUrl);
     } catch(_) {}
   }
 } else {
@@ -1222,6 +1232,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
