@@ -900,6 +900,10 @@ $('#f').addEventListener('submit',(e)=>{
     await endUploadGuard_();
 
     doneBox.style.display='block';
+
+    // ★追加：見た目を完全に初期化（不安を消す）
+    resetUiAfterSuccess_();
+    
     queue.length=0;
     render();
   })().catch(async err=>{
@@ -1027,6 +1031,9 @@ function render(){
   thumbs.innerHTML='';
   if(!requireKey()) return;
 
+  // ★追加：queueが空でも必ずバッジを同期（送信後に残る問題を潰す）
+  updateBadges();
+  
   if(queue.length>MAX_FILES){
     msgBad(`最大 ${MAX_FILES} 枚までです（今 ${queue.length} 枚）。減らしてください。`);
     sendBtn.disabled=true;
@@ -1148,6 +1155,28 @@ function updateBadges(){
   setBadge(shotBadge, photoCount);
 }
 
+// ★ここに追加（render() の前でも後でもOKだが、この辺が安全）
+function resetUiAfterSuccess_(){
+  queue.length = 0;
+  thumbs.innerHTML = '';
+
+  try { $('#note').value = ''; } catch(_){}
+
+  try{
+    destBox.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.checked = false;
+      const item = cb.closest('.dest-item');
+      if(item) item.classList.remove('active');
+    });
+  }catch(_){}
+
+  updateBadges();
+  sendBtn.disabled = true;
+
+  precheck.className='msg msg-info';
+  precheck.textContent='送信先を選んで、ファイルを選ぶか写真を撮ってください。';
+}
+  
 /** ===== 画像最適化（20MB以内に収める最小限） ===== */
 function readFileAsDataURL(file){ return new Promise((ok,ng)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=ng; r.readAsDataURL(file); }); }
 function loadImage(url){ return new Promise((ok,ng)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=ng; i.src=url; }); }
@@ -1266,6 +1295,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
