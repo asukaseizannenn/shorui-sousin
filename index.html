@@ -563,12 +563,34 @@ const IS_IOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS対策
 
-/** ===== 鍵：QRのURLに埋める → 端末保存 → URLから消す（入力ゼロ） ===== */
+/** ===== 鍵：QRのURLに埋める → 端末保存 ===== */
 const qs = new URLSearchParams(location.search);
+const installMode = (qs.get('install') === '1');
+
+const IS_STANDALONE =
+  window.matchMedia('(display-mode: standalone)').matches ||
+  (typeof navigator.standalone !== 'undefined' && navigator.standalone); // iOS
+
 let AUTH_KEY = (qs.get('k') || '').trim();
+
 if (AUTH_KEY) {
+  // どちらのコンテキストでも保存はする
   try { localStorage.setItem(KEY_STORAGE, AUTH_KEY); } catch(_) {}
-  try { qs.delete('k'); history.replaceState(null,'', location.pathname + (qs.toString() ? '?' + qs.toString() : '')); } catch(_) {}
+
+  // ★消すタイミングが重要
+  // - install=1 のSafariでは消さない（ホーム画面追加時に k を残すため）
+  // - ホーム画面（standalone）で起動したら消す（以後URLにキーを残さない）
+  // - install=0（通常運用）は今まで通り消してOK
+  const shouldStrip = IS_STANDALONE || !installMode;
+
+  if (shouldStrip) {
+    try {
+      qs.delete('k');
+      qs.delete('install');
+      const q = qs.toString();
+      history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+    } catch(_) {}
+  }
 } else {
   try { AUTH_KEY = (localStorage.getItem(KEY_STORAGE) || '').trim(); } catch(_) {}
 }
@@ -1164,6 +1186,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
