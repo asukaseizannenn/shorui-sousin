@@ -476,7 +476,6 @@ function getDeviceId_(){
     localStorage.setItem(DEVICE_STORAGE, id);
     return id;
   }catch(_){
-    // localStorageが死んでる環境向け（ほぼ起きない）
     return 'd_fallback_' + Math.random().toString(36).slice(2);
   }
 }
@@ -1373,6 +1372,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
