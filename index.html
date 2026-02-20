@@ -456,7 +456,32 @@ const MAX_BYTES = 20*1024*1024;
 const ALLOW_MIME = ['image/jpeg','image/png','image/heic','image/heif','application/pdf'];
 
 const KEY_STORAGE = 'upload_key_v1';
+  
+// ===== 端末ID（匿名 deviceId）=====
+const DEVICE_STORAGE = 'upload_device_id_v1';
 
+function getDeviceId_(){
+  try{
+    let id = localStorage.getItem(DEVICE_STORAGE);
+    if(id) return id;
+
+    // 初回生成（推測困難な乱数）
+    if (crypto && crypto.getRandomValues){
+      const a = new Uint32Array(4);
+      crypto.getRandomValues(a);
+      id = 'd_' + Array.from(a).map(x=>x.toString(16)).join('') + '_' + Date.now();
+    }else{
+      id = 'd_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+    }
+    localStorage.setItem(DEVICE_STORAGE, id);
+    return id;
+  }catch(_){
+    // localStorageが死んでる環境向け（ほぼ起きない）
+    return 'd_fallback_' + Math.random().toString(36).slice(2);
+  }
+}
+const DEVICE_ID = getDeviceId_();
+  
 // ★cookieブリッジ
 const KEY_COOKIE = 'upload_key_v1_cookie';
 
@@ -925,6 +950,7 @@ $('#f').addEventListener('submit',(e)=>{
         token,
         note,
         destIds,
+        deviceId: DEVICE_ID, // ← 追加（画面は変わらない）
         items: [{
           name: (f.name || 'upload.bin'),
           mime: packed.mime,
@@ -1347,6 +1373,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
