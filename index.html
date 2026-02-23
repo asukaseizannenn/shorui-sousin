@@ -302,6 +302,45 @@
     border-radius:18px;
     backdrop-filter: blur(2px);
   }
+
+  /* === install案内を“迷わせない”見た目に === */
+  .installBox{
+    margin-top:10px;
+  }
+  .installBox .lead{
+    font-weight:900;
+    font-size:16px;
+    line-height:1.5;
+  }
+  .installBox ol{
+    margin:10px 0 0 20px;
+    padding:0;
+  }
+  .installBox li{
+    margin:8px 0;
+    font-size:16px;
+    line-height:1.55;
+  }
+  .installBox .hint{
+    margin-top:10px;
+    color:#444;
+    font-weight:700;
+  }
+  .installBox .mini{
+    margin-top:6px;
+  }
+  
+  /* iPhoneの共有っぽいアイコン（SVG） */
+  .shareIco{
+    width:22px;
+    height:22px;
+    vertical-align:-4px;
+    stroke: currentColor;
+    stroke-width: 3.0;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
 </style>
 </head>
 
@@ -662,6 +701,17 @@ const IS_IOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS対策
 
+// JSに “iPhone共有アイコンSVG” を追加
+const IOS_SHARE_SVG = `
+  <svg class="shareIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <!-- open-top square -->
+    <path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9"/>
+    <!-- arrow up -->
+    <path d="M12 3v10"/>
+    <path d="M8 7l4-4 4 4"/>
+  </svg>
+`;
+  
 /** ===== 鍵：QRのURLに埋める → 端末保存（search/hash + cookie） ===== */
 const qs = new URLSearchParams(location.search);
 const hs = new URLSearchParams((location.hash || '').replace(/^#/, ''));
@@ -712,27 +762,48 @@ if (AUTH_KEY) {
 
 function updateInstallGuide_(){
   // install=1 かつ Safari（= standalone ではない）だけ案内表示
-  if(installMode && !IS_STANDALONE){
-    const shareHint = IS_IOS ? '画面下の共有（□↑）' : 'ブラウザ右上のメニュー（︙）';
-    installGuide.style.display = 'block';
-    installGuide.className = 'msg msg-info';
-    installGuide.innerHTML = `
-      <strong>📌 ホーム画面に追加してください</strong><br>
-      次回から迷わないために、<b>アイコンから開く運用</b>にします。<br>
-      <ol style="margin:8px 0 0 18px;padding:0">
-        <li>${shareHint} をタップ</li>
-        <li>「ホーム画面に追加」</li>
-        <li>追加した <b>書類送信</b> アイコンから開く</li>
-      </ol>
-      <div class="mini">※ 追加後は、このQRを使わずアイコンだけでOKです。</div>
-      <div class="mini">※ LINE等の内蔵ブラウザなら「Safariで開く」を選んでください。</div>
-    `;
-  }else{
+  if(!(installMode && !IS_STANDALONE)){
     installGuide.style.display = 'none';
     installGuide.innerHTML = '';
+    return;
   }
-}
 
+  installGuide.style.display = 'block';
+  installGuide.className = 'msg msg-info';
+
+  // iPhoneは「共有」を文字で明示＋実物寄せSVGを添える
+  const iosShare = `「<b>共有</b>」 ${IOS_SHARE_SVG}`;
+
+  const shareHint = IS_IOS
+    ? `画面下（または上）にある ${iosShare}`
+    : 'ブラウザ右上のメニュー（︙）';
+
+  const openSafariHint = IS_IOS
+    ? `※ LINE等の画面で開いている場合：共有から「<b>Safariで開く</b>」を選んでから実行してください。`
+    : `※ アプリ内ブラウザの場合は「ブラウザで開く（Chrome等）」を選んでから実行してください。`;
+
+  const toolbarHint = IS_IOS
+    ? `※ 共有ボタンが見当たらない時：<b>画面を1回タップ</b>すると下/上のバーが出ます。`
+    : '';
+
+  installGuide.innerHTML = `
+    <div class="installBox">
+      <div class="lead">📌 次回から迷わないように、<b>ホーム画面に追加</b>してください</div>
+
+      <ol>
+        <li>${shareHint} を押す</li>
+        <li>一覧から「<b>ホーム画面に追加</b>」を押す</li>
+        <li>追加した「<b>書類送信</b>」アイコンから開く</li>
+      </ol>
+
+      <div class="hint">${openSafariHint}</div>
+      ${toolbarHint ? `<div class="hint">${toolbarHint}</div>` : ''}
+
+      <div class="mini">※ 追加後は、このQRを使わず <b>アイコンから開くだけ</b> でOKです。</div>
+    </div>
+  `;
+}
+  
 function requireKey(){
   // ★最後の保険：ここでもcookieから復元を試す
   if(!AUTH_KEY){
@@ -1372,6 +1443,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
