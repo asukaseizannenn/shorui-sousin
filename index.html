@@ -337,16 +337,25 @@
     vertical-align:-4px;
     stroke: currentColor;
     fill:none;
-    stroke-linecap: round;
     stroke-linejoin: round;
   }
   
+  /* 箱の角丸感 */
   .shareIco .shareBox{
     stroke-width: 2.6;
+    stroke-linecap: round;
   }
   
+  /* 上辺の切れ目を“食い込ませない” */
+  .shareIco .shareTop{
+    stroke-width: 2.6;
+    stroke-linecap: butt;   /* ★ここ重要：切れ目に丸端が入らない */
+  }
+  
+  /* 矢印は少し太め */
   .shareIco .shareArrow{
-    stroke-width: 3.2; /* 矢印を少し太くして“突き破り感” */
+    stroke-width: 3.1;
+    stroke-linecap: round;
   }
   
 </style>
@@ -712,14 +721,16 @@ const IS_IOS =
 // JSに “iPhone共有アイコンSVG” を追加
 const IOS_SHARE_SVG = `
   <svg class="shareIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <!-- box (top edge is split: left + right) -->
-    <path class="shareBox" d="M7 9 Q5 9 5 11 V19 Q5 21 7 21 H17 Q19 21 19 19 V11 Q19 9 17 9" />
-    <path class="shareBox" d="M7 9 H10" />
-    <path class="shareBox" d="M14 9 H17" />
+    <!-- box body -->
+    <path class="shareBox" d="M7 9 Q5 9 5 11 V19 Q5 21 7 21 H17 Q19 21 19 19 V11 Q19 9 17 9"/>
 
-    <!-- arrow (drawn last so it looks like it breaks through) -->
-    <path class="shareArrow" d="M12 14 V3" />
-    <path class="shareArrow" d="M8.5 6.5 L12 3 L15.5 6.5" />
+    <!-- top edge (split) : widen slit so arrow doesn't visually touch -->
+    <path class="shareTop" d="M7 9 H9.3"/>
+    <path class="shareTop" d="M14.7 9 H17"/>
+
+    <!-- arrow (drawn last so it's on top) -->
+    <path class="shareArrow" d="M12 14 V3"/>
+    <path class="shareArrow" d="M8.6 6.6 L12 3 L15.4 6.6"/>
   </svg>
 `;
   
@@ -1454,6 +1465,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
