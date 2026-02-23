@@ -340,21 +340,21 @@
     stroke-linejoin: round;
   }
   
-  /* 箱の角丸感 */
+  /* 全体を細めに */
   .shareIco .shareBox{
-    stroke-width: 2.6;
+    stroke-width: 2.0;
     stroke-linecap: round;
   }
   
-  /* 上辺の切れ目を“食い込ませない” */
+  /* 上辺の切れ目に丸端が食い込まないように */
   .shareIco .shareTop{
-    stroke-width: 2.6;
-    stroke-linecap: butt;   /* ★ここ重要：切れ目に丸端が入らない */
+    stroke-width: 2.0;
+    stroke-linecap: butt;
   }
   
-  /* 矢印は少し太め */
+  /* 矢印は少しだけ主張 */
   .shareIco .shareArrow{
-    stroke-width: 2.9;
+    stroke-width: 2.3;
     stroke-linecap: round;
   }
   
@@ -724,13 +724,13 @@ const IOS_SHARE_SVG = `
     <!-- box body -->
     <path class="shareBox" d="M7 9 Q5 9 5 11 V19 Q5 21 7 21 H17 Q19 21 19 19 V11 Q19 9 17 9"/>
 
-    <!-- top edge (split) : widen slit so arrow doesn't visually touch -->
-    <path class="shareTop" d="M7 9 H9.3"/>
-    <path class="shareTop" d="M14.7 9 H17"/>
+    <!-- top edge split (slit widened) -->
+    <path class="shareTop" d="M7 9 H9.0"/>
+    <path class="shareTop" d="M15.0 9 H17"/>
 
-    <!-- arrow (drawn last so it's on top) -->
+    <!-- arrow (chevron raised so it doesn't touch top edge) -->
     <path class="shareArrow" d="M12 14 V3"/>
-    <path class="shareArrow" d="M8.6 6.6 L12 3 L15.4 6.6"/>
+    <path class="shareArrow" d="M8.7 6.0 L12 3 L15.3 6.0"/>
   </svg>
 `;
   
@@ -1465,6 +1465,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
