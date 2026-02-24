@@ -561,6 +561,12 @@ const queue = [];
 let selectedDestSet = new Set();
 const $ = s => document.querySelector(s);
 
+// ★ここに追加（queueの直後が安全）
+function pushQueue_(file, src){
+  try { file.__src = src; } catch(_){}
+  queue.push(file);
+}
+
 const destBox = $('#destBox');
 const pickInput = $('#pick');
 const cameraFile = $('#cameraFile');
@@ -915,9 +921,13 @@ $('#camBtn').onclick=()=>{
 };
 $('#clearBtn').onclick=()=>{ queue.length=0; render(); };
 
-pickInput.addEventListener('change',e=>{ for(const f of e.target.files) queue.push(f); e.target.value=''; render(); });
+pickInput.addEventListener('change',e=>{
+  for(const f of e.target.files) pushQueue_(f,'pick');
+  e.target.value='';
+  render();
+});
 cameraFile.addEventListener('change',e=>{
-  for(const f of e.target.files) queue.push(f);
+  for(const f of e.target.files) pushQueue_(f,'camera');
   e.target.value='';
   render();
 });
@@ -971,7 +981,8 @@ camShot.onclick=async ()=>{
   const blob = await snapFromVideo();
   const d=new Date(), z=n=>String(n).padStart(2,'0');
   const name=`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.jpg`;
-  queue.push(toFileLike(blob,name));
+  const ff = toFileLike(blob,name);
+  pushQueue_(ff,'camera');
   render();
   updateBadges();
 };
@@ -1320,9 +1331,11 @@ function setBadge(el, n){
   }
 }
 function updateBadges(){
-  const photoCount = queue.filter(f => (f.type||'').startsWith('image/')).length;
-  setBadge(camBadge, photoCount);
-  setBadge(shotBadge, photoCount);
+  const cameraCount = queue.filter(f =>
+    (f.type||'').startsWith('image/') && f.__src === 'camera'
+  ).length;
+  setBadge(camBadge, cameraCount);
+  setBadge(shotBadge, cameraCount);
 }
 
 // ★ここに追加（render() の前でも後でもOKだが、この辺が安全）
@@ -1465,6 +1478,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
