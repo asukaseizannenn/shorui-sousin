@@ -1397,16 +1397,21 @@ function setBadge(el, n){
   }
 }
 function updateBadges(){
-  // 総枚数（これが「今何枚あるか」）
-  setBadge(pickBadge, queue.length);
+  // 互換のため、__src が無い古い要素は「pick扱い」に寄せる
+  const pickedCount = queue.filter(f => (f.__src === 'pick' || !f.__src)).length;
+  const cameraCount = queue.filter(f => f.__src === 'camera').length;
 
-  // カメラ由来の枚数（前に入れた __src がある前提）
-  const cameraCount = queue.filter(f =>
-    (f.type||'').startsWith('image/') && f.__src === 'camera'
+  // 📁＝「選ぶ」で入れた数（撮影では増えない）
+  setBadge(pickBadge, pickedCount);
+
+  // 📸＝「撮る」で入れた“写真”の数（あなたの仕様通り）
+  // ※カメラ由来のうち画像だけ数えたいならこのまま、全部数えるなら cameraCount のままでOK
+  const cameraPhotoCount = queue.filter(f =>
+    f.__src === 'camera' && (f.type||'').startsWith('image/')
   ).length;
 
-  setBadge(camBadge, cameraCount);
-  setBadge(shotBadge, cameraCount);
+  setBadge(camBadge, cameraPhotoCount);
+  setBadge(shotBadge, cameraPhotoCount);
 }
 
 // ★ここに追加（render() の前でも後でもOKだが、この辺が安全）
@@ -1549,6 +1554,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
