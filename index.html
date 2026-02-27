@@ -1796,17 +1796,16 @@ async function packToLimit(file,maxBytes){
   })(); // ★★★ これが無かった（IIFEを閉じる）
   
   // 初期化全体が落ちた時の保険（任意だけど強く推奨）
-  /*
   })().catch(err=>{
     msgBad('初期化に失敗しました。');
     console.error(err);
     hideSplash_();
   });
-  */
 
 </script>
 </body>
 </html>
+
 
 
 
