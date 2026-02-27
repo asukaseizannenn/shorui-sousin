@@ -363,6 +363,27 @@
     backdrop-filter: blur(2px);
   }
 
+  /* ===== 未選択時の強調（スクロール誘導用） ===== */
+  .dest-box.attn{
+    outline: 3px solid rgba(239,87,83,.85);
+    outline-offset: 4px;
+    box-shadow: 0 0 0 6px rgba(239,87,83,.18), 0 16px 28px rgba(0,0,0,.10);
+    border-radius: 18px;
+    animation: destPulse 1.2s ease-in-out 2;
+  }
+  @keyframes destPulse{
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(-1px); }
+    70%  { transform: translateY(0); }
+    100% { transform: translateY(0); }
+  }
+  
+  /* 警告枠を少し“上に近い位置”で目立たせる */
+  #destWarn{
+    margin: 8px 0 10px;
+    font-weight: 900;
+  }
+  
   /* === install案内を“迷わせない”見た目に === */
   .installBox{
     margin-top:10px;
@@ -428,6 +449,7 @@
 
     <form id="f" autocomplete="off" novalidate>
       <label>送信先（複数選択可）</label>
+      <div id="destWarn" class="msg msg-bad" style="display:none"></div>
       <div id="destBox" class="dest-box"></div>
       <div class="mini">※ 選んだ部署すべてに同じファイルが保存されます。</div>
 
@@ -545,6 +567,8 @@ function renderDestinations_(dests){
       wrap.classList.toggle('active', cb.checked);
       if(cb.checked) selectedDestSet.add(cb.value);
       else selectedDestSet.delete(cb.value);
+    
+      if(getSelectedDestIds().length > 0) hideDestWarn_(); // ★追加
     });
 
     destBox.appendChild(wrap);
@@ -624,6 +648,45 @@ const queue = [];
 let selectedDestSet = new Set();
 const $ = s => document.querySelector(s);
 
+function showDestWarn_(text){
+  const w = $('#destWarn');
+  if(w){
+    w.style.display = 'block';
+    w.textContent = '⚠ ' + (text || '送信先を選んでください');
+  }
+}
+
+function hideDestWarn_(){
+  const w = $('#destWarn');
+  if(w){
+    w.style.display = 'none';
+    w.textContent = '';
+  }
+}
+
+function scrollToDestAndWarn_(text){
+  showDestWarn_(text);
+
+  // 送信先エリアを強調（点滅）
+  destBox.classList.remove('attn'); // 連打でも再点滅するように
+  void destBox.offsetWidth;         // reflowでアニメを確実に再発火
+  destBox.classList.add('attn');
+  setTimeout(()=>destBox.classList.remove('attn'), 2600);
+
+  // 送信先まで自動スクロール（“上の方に表示”させる）
+  try{
+    destBox.scrollIntoView({ behavior:'smooth', block:'start' });
+    // 少しだけ上に余白を作る（見切れ対策）
+    setTimeout(()=>window.scrollBy({ top:-12, left:0, behavior:'smooth' }), 250);
+  }catch(_){}
+
+  // 可能なら最初のチェックボックスにフォーカス
+  try{
+    const first = destBox.querySelector('input[type=checkbox]');
+    if(first) first.focus({ preventScroll:true });
+  }catch(_){}
+}
+  
 // ★ここに追加（queueの直後が安全）
 function pushQueue_(file, src){
   try { file.__src = src; } catch(_){}
@@ -971,16 +1034,24 @@ async function loadDestinations(){
 
 /** ===== UI操作 ===== */
 $('#pickBtn').onclick=()=>{
-  if(destLoading){ msgBad('送信先を読み込み中です。少し待ってください。'); return; } // ★追加
+  if(destLoading){ msgBad('送信先を読み込み中です。少し待ってください。'); return; }
   if(!requireKey()) return;
-  if(getSelectedDestIds().length===0){ msgBad('送信先を選んでください'); return; }
+  if(getSelectedDestIds().length===0){
+    scrollToDestAndWarn_('送信先を選んでください（複数選択可）');
+    return;
+  }
+  hideDestWarn_();
   pickInput.click();
 };
 
 $('#camBtn').onclick=()=>{
-  if(destLoading){ msgBad('送信先を読み込み中です。少し待ってください。'); return; } // ★追加
+  if(destLoading){ msgBad('送信先を読み込み中です。少し待ってください。'); return; }
   if(!requireKey()) return;
-  if(getSelectedDestIds().length===0){ msgBad('送信先を選んでください'); return; }
+  if(getSelectedDestIds().length===0){
+    scrollToDestAndWarn_('先に送信先を選んでください');
+    return;
+  }
+  hideDestWarn_();
   openCameraOrFallback();
 };
 $('#clearBtn').onclick=()=>{ queue.length=0; render(); };
@@ -1091,7 +1162,11 @@ $('#f').addEventListener('submit',(e)=>{
   if(!requireKey()) return;
 
   const destIds = getSelectedDestIds();
-  if(destIds.length===0){ msgBad('送信先を選んでください'); return; }
+  if(destIds.length===0){
+    scrollToDestAndWarn_('送信先が未選択です。ここで選んでから送信してください');
+    return;
+  }
+  hideDestWarn_();
   if(queue.length===0) return;
 
   (async ()=>{
@@ -1554,6 +1629,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
