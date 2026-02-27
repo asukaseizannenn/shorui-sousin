@@ -1774,7 +1774,7 @@ async function packToLimit(file,maxBytes){
         }
       }
   
-      // ★notice を保存（期間外/無効なら null が返る想定）
+      // ★notice を保存（期間外/無効なら null）
       if(js?.notice){
         saveNoticeCache2_(js.notice);
       }else{
@@ -1792,10 +1792,22 @@ async function packToLimit(file,maxBytes){
       // 失敗時もスプラッシュが出ていたら解除
       hideSplash_();
     });
+  
+  })(); // ★★★ これが無かった（IIFEを閉じる）
+  
+  // 初期化全体が落ちた時の保険（任意だけど強く推奨）
+  /*
+  })().catch(err=>{
+    msgBad('初期化に失敗しました。');
+    console.error(err);
+    hideSplash_();
+  });
+  */
 
 </script>
 </body>
 </html>
+
 
 
 
