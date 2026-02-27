@@ -992,6 +992,19 @@ const IS_IOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS対策
 
+const shutterSnd = document.getElementById('shutterSnd');
+
+function playShutter_(){
+  // iPhoneのネイティブカメラ(input capture)はOS側で鳴るので二重鳴り回避
+  if(IS_IOS) return;
+
+  try{
+    if(!shutterSnd) return;
+    shutterSnd.currentTime = 0;
+    shutterSnd.play().catch(()=>{});
+  }catch(_){}
+}
+  
 // JSに “iPhone共有アイコンSVG” を追加
 const IOS_SHARE_SVG = `
   <svg class="shareIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1256,6 +1269,9 @@ function stopCamera(){
 camClose.onclick=()=>{ stopCamera(); render(); };
 camShot.onclick=async ()=>{
   if(!camStream) return;
+
+  playShutter_(); // ★追加
+  
   const blob = await snapFromVideo();
   const d=new Date(), z=n=>String(n).padStart(2,'0');
   const name=`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.jpg`;
@@ -1792,9 +1808,12 @@ async function packToLimit(file,maxBytes){
   hideSplash_();
 });
 
+<audio id="shutterSnd" src="./shutter.mp3" preload="auto"></audio>
+  
 </script>
 </body>
 </html>
+
 
 
 
