@@ -1718,7 +1718,6 @@ async function packToLimit(file,maxBytes){
 (async ()=>{
 
   // ★install=1 のときだけ「ホーム画面に追加」案内を出す
-  // （requireKeyで止まるケースでも、案内だけは出したいので最初に呼ぶ）
   try{ updateInstallGuide_(); }catch(_){}
 
   // ===== 更新チェック（SWなしで確実に最新版へ）=====
@@ -1730,81 +1729,73 @@ async function packToLimit(file,maxBytes){
       const KEY = 'app_version_seen';
       const prev = localStorage.getItem(KEY);
 
-      // 既に使ったことがある端末で、バージョンが変わったらリロード
       if(prev && prev !== v){
         localStorage.setItem(KEY, v);
         location.reload();
-        return; // ★重要：以降の初期化を止める
+        return;
       }
       localStorage.setItem(KEY, v);
     }
   }catch(_){
-    // version.json が取れない時は無視して続行（ネット不安定でも業務を止めない）
+    // version.json が取れない時は無視
   }
 
   // ===== ここから既存の初期化 =====
   disableAll(false);
 
-  // 鍵が無い場合は requireKey() がメッセージを出して止める
-  // （install=1 の案内は上で出しているので、ここでreturnしてOK）
   if(!requireKey()) return;
 
   render();
   setDestLoadingUI_(true);
-  
-  // ★前回キャッシュがあれば起動直後からスプラッシュを出せる（初回は出ないのは仕様）
+
+  // ★前回キャッシュがあれば起動直後からスプラッシュを出せる（初回は出ない）
   const cachedSplash = loadSplashCache_();
   const cachedNotice = loadNoticeCache2_();
   if(cachedSplash && cachedSplash.enabled){
     showSplash_(cachedSplash, cachedNotice);
   }
-  
+
   loadDestinations()
     .then((js)=>{
       setDestLoadingUI_(false);
       render();
-  
+
       // ★サーバ設定を保存
       if(js?.splash){
         saveSplashCache_(js.splash);
-  
+
         // ★今回の設定で「出す」なら出す（キャッシュよりサーバ優先）
         if(js.splash.enabled){
           showSplash_(js.splash, js.notice || cachedNotice);
         }
       }
-  
+
       // ★notice を保存（期間外/無効なら null）
       if(js?.notice){
         saveNoticeCache2_(js.notice);
       }else{
         try{ localStorage.removeItem(NOTICE_CACHE_KEY2); }catch(_){}
       }
-  
-      // ★準備完了でスプラッシュを消す
+
       hideSplash_();
     })
     .catch(err=>{
       setDestLoadingUI_(false);
       msgBad('送信先の取得に失敗しました。電波/URLを確認して更新してください。');
       console.error(err);
-  
-      // 失敗時もスプラッシュが出ていたら解除
       hideSplash_();
     });
-  
-  })(); // ★★★ これが無かった（IIFEを閉じる）
-  
-  // 初期化全体が落ちた時の保険（任意だけど強く推奨）
-  })().catch(err=>{
-    msgBad('初期化に失敗しました。');
-    console.error(err);
-    hideSplash_();
-  });
+
+})().catch(err=>{
+  msgBad('初期化に失敗しました。');
+  console.error(err);
+  hideSplash_();
+});
 
 </script>
 </body>
 </html>
+
 
 
 
