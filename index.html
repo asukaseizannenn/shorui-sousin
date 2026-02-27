@@ -382,8 +382,9 @@
   #destWarn{
     margin: 8px 0 10px;
     font-weight: 900;
+    scroll-margin-top: 16px; /* 追加分 */
   }
-  
+    
   /* === install案内を“迷わせない”見た目に === */
   .installBox{
     margin-top:10px;
@@ -668,19 +669,29 @@ function scrollToDestAndWarn_(text){
   showDestWarn_(text);
 
   // 送信先エリアを強調（点滅）
-  destBox.classList.remove('attn'); // 連打でも再点滅するように
-  void destBox.offsetWidth;         // reflowでアニメを確実に再発火
+  destBox.classList.remove('attn');
+  void destBox.offsetWidth;
   destBox.classList.add('attn');
   setTimeout(()=>destBox.classList.remove('attn'), 2600);
 
-  // 送信先まで自動スクロール（“上の方に表示”させる）
-  try{
-    destBox.scrollIntoView({ behavior:'smooth', block:'start' });
-    // 少しだけ上に余白を作る（見切れ対策）
-    setTimeout(()=>window.scrollBy({ top:-12, left:0, behavior:'smooth' }), 250);
-  }catch(_){}
+  // ★スクロールは「警告文」へ（destBoxだと上にある文が見切れる）
+  const warn = $('#destWarn') || destBox;
 
-  // 可能なら最初のチェックボックスにフォーカス
+  // iOSはscrollIntoViewが“少し足りない”ことがあるので、後で補正する
+  const scrollToWarn = (behavior) => {
+    try{
+      // まず確実に視界内へ（SE対策で center が安全）
+      warn.scrollIntoView({ behavior, block:'center' });
+    }catch(_){}
+  };
+
+  scrollToWarn('smooth');
+
+  // ★位置が甘い時の保険（iOS Safari対策）
+  setTimeout(()=>scrollToWarn('auto'), 350);
+  setTimeout(()=>scrollToWarn('auto'), 900);
+
+  // 可能なら最初のチェックボックスにフォーカス（スクロールはしない）
   try{
     const first = destBox.querySelector('input[type=checkbox]');
     if(first) first.focus({ preventScroll:true });
@@ -1629,6 +1640,7 @@ async function packToLimit(file,maxBytes){
 </script>
 </body>
 </html>
+
 
 
 
