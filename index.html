@@ -261,6 +261,34 @@
     padding:18px;
     box-shadow:0 12px 40px rgba(0,0,0,.35);
   }
+
+  /* 起動スプラッシュ */
+  .splash{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.55);
+    display:flex; align-items:center; justify-content:center;
+    z-index:99998; /* blocker(99999)より下 */
+    padding:20px;
+  }
+  .splash[hidden]{ display:none; }
+  .splashCard{
+    width:min(560px, 100%);
+    background:#fff;
+    border-radius:18px;
+    padding:18px;
+    box-shadow:0 12px 40px rgba(0,0,0,.35);
+  }
+  .splashTop{
+    display:flex;
+    gap:14px;
+    align-items:center;
+    flex-wrap:nowrap;
+    min-width:0;
+  }
+  .splashText{ min-width:0; flex:1 1 auto; }
+  
+  /* warn 用（既存は info/bad/ok だけなので追加） */
+  .msg-warn{background:#fff5e6;color:#8a4b00;border:1px solid #ffd6a1}
   /* ===== 全画面ロック：上段（スピナー＋テキスト）完全版 ===== */
   .blkTop{
     display:flex;
@@ -532,7 +560,22 @@
     <button id="blkFocus" class="blkFocus" type="button">送信中</button>
   </div>
 </div>
+<!-- 起動スプラッシュ（準備中） -->
+<div id="splash" class="splash" hidden aria-hidden="true">
+  <div class="splashCard" role="status" aria-live="polite">
+    <div class="splashTop">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="splashText">
+        <div id="splashTitle" class="blkTitle">準備中です</div>
+        <div id="splashSub" class="blkSub">送信先を読み込み中…</div>
+      </div>
+    </div>
 
+    <div id="splashTip" class="blkMini" style="margin-top:12px"></div>
+
+    <div id="splashNotice" class="msg msg-info" style="display:none; margin-top:12px"></div>
+  </div>
+</div>
 <script>
 /* ====== あなたの /exec（埋め込み済み） ====== */
 const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyuh_SrSLoyH5FKWnfYggR6eZWlRr26OwmYQEd2f5OCMsiyqatb2ckI8-SKgREiEN6BwA/exec';
@@ -649,6 +692,93 @@ const queue = [];
 let selectedDestSet = new Set();
 const $ = s => document.querySelector(s);
 
+/* ===== スプラッシュ＆お知らせ（listDest同梱） ===== */
+const splashEl = $('#splash');
+const splashTitleEl = $('#splashTitle');
+const splashSubEl   = $('#splashSub');
+const splashTipEl   = $('#splashTip');
+const splashNoticeEl= $('#splashNotice');
+
+const SETTINGS_CACHE_KEY = 'settings_cache_v1:' + API_ENDPOINT; // splash保存
+const NOTICE_CACHE_KEY2  = 'notice_cache_v2:' + API_ENDPOINT;   // notice保存（既に別で作ってたら名前合わせてOK）
+
+let splashShownAt = 0;
+
+function saveSplashCache_(splash){
+  try{ localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({ts:Date.now(), splash})); }catch(_){}
+}
+function loadSplashCache_(){
+  try{
+    const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    return obj?.splash || null;
+  }catch(_){ return null; }
+}
+
+function noticeClass_(level){
+  level = String(level||'info').toLowerCase();
+  if(level === 'urgent') return 'msg msg-bad';
+  if(level === 'warn')   return 'msg msg-warn';
+  return 'msg msg-info';
+}
+
+function showSplash_(splash, notice){
+  if(!splashEl) return;
+
+  splashTitleEl.textContent = splash?.title || '準備中です';
+  splashSubEl.textContent   = splash?.subtitle || '送信先を読み込み中…';
+
+  const tip = String(splash?.tip || '').trim();
+  splashTipEl.textContent = tip;
+  splashTipEl.style.display = tip ? 'block' : 'none';
+
+  // ロード中のお知らせ（あれば表示）
+  if(notice && (notice.title || notice.body)){
+    splashNoticeEl.style.display = 'block';
+    splashNoticeEl.className = noticeClass_(notice.level);
+    const head = (String(notice.level||'') === 'urgent') ? '【重要】' : '';
+    splashNoticeEl.innerHTML =
+      `<strong>${head}${escapeHtml(notice.title||'お知らせ')}</strong>` +
+      `<div class="mini" style="margin-top:6px">${escapeHtml(notice.body||'')}</div>`;
+  }else{
+    splashNoticeEl.style.display = 'none';
+    splashNoticeEl.innerHTML = '';
+  }
+
+  splashEl.hidden = false;
+  splashEl.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+  splashShownAt = Date.now();
+}
+
+function hideSplash_(){
+  if(!splashEl) return;
+
+  // 速すぎるとチラつくので最低表示時間を確保
+  const MIN_MS = 450;
+  const wait = Math.max(0, MIN_MS - (Date.now() - splashShownAt));
+
+  setTimeout(()=>{
+    splashEl.hidden = true;
+    splashEl.setAttribute('aria-hidden','true');
+    document.body.style.overflow = '';
+  }, wait);
+}
+
+/* notice の保存（期限内かどうかはバックエンドが判定済み） */
+function saveNoticeCache2_(notice){
+  try{ localStorage.setItem(NOTICE_CACHE_KEY2, JSON.stringify({ts:Date.now(), notice})); }catch(_){}
+}
+function loadNoticeCache2_(){
+  try{
+    const raw = localStorage.getItem(NOTICE_CACHE_KEY2);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    return obj?.notice || null;
+  }catch(_){ return null; }
+}
+  
 function showDestWarn_(text){
   const w = $('#destWarn');
   if(w){
@@ -1035,12 +1165,14 @@ async function loadDestinations(){
     renderDestinations_(cached);
   }
 
-  // 2) 裏で最新取得（遅くてもUIは先に出る）
+  // 2) 裏で最新取得
   const js = await jsonp(API_ENDPOINT + '?action=listDest');
   if(!js.ok || !Array.isArray(js.dests)) throw new Error('listDest_failed');
 
   renderDestinations_(js.dests);
   saveDestCache_(js.dests);
+
+  return js; // ★これが追加点
 }
 
 /** ===== UI操作 ===== */
@@ -1617,29 +1749,54 @@ async function packToLimit(file,maxBytes){
   // （install=1 の案内は上で出しているので、ここでreturnしてOK）
   if(!requireKey()) return;
 
-  render();                 // 先に画面を整える
-  setDestLoadingUI_(true);  // 送信先ロード中UI＋操作ロック
-
-  loadDestinations()         // awaitしない（UIブロックしない）
-    .then(()=>{
+  render();
+  setDestLoadingUI_(true);
+  
+  // ★前回キャッシュがあれば起動直後からスプラッシュを出せる（初回は出ないのは仕様）
+  const cachedSplash = loadSplashCache_();
+  const cachedNotice = loadNoticeCache2_();
+  if(cachedSplash && cachedSplash.enabled){
+    showSplash_(cachedSplash, cachedNotice);
+  }
+  
+  loadDestinations()
+    .then((js)=>{
       setDestLoadingUI_(false);
       render();
+  
+      // ★サーバ設定を保存
+      if(js?.splash){
+        saveSplashCache_(js.splash);
+  
+        // ★今回の設定で「出す」なら出す（キャッシュよりサーバ優先）
+        if(js.splash.enabled){
+          showSplash_(js.splash, js.notice || cachedNotice);
+        }
+      }
+  
+      // ★notice を保存（期間外/無効なら null が返る想定）
+      if(js?.notice){
+        saveNoticeCache2_(js.notice);
+      }else{
+        try{ localStorage.removeItem(NOTICE_CACHE_KEY2); }catch(_){}
+      }
+  
+      // ★準備完了でスプラッシュを消す
+      hideSplash_();
     })
     .catch(err=>{
       setDestLoadingUI_(false);
       msgBad('送信先の取得に失敗しました。電波/URLを確認して更新してください。');
       console.error(err);
+  
+      // 失敗時もスプラッシュが出ていたら解除
+      hideSplash_();
     });
-
-})().catch(err=>{
-  msgBad('初期化に失敗しました。');
-  console.error(err);
-});
-
 
 </script>
 </body>
 </html>
+
 
 
 
